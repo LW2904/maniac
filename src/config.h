@@ -6,6 +6,7 @@
 
 #include <cstdio>
 #include <vector>
+#include <cstring>
 #include <utility>
 
 struct Output {
@@ -36,7 +37,7 @@ struct Output {
 		constexpr auto long_arg_length = 22;
 
 		char preamble[PAGE_WIDTH];
-		sprintf_s(preamble, PAGE_WIDTH, "    %s / %-*s", s_form, long_arg_length,
+		snprintf(preamble, PAGE_WIDTH, "    %s / %-*s", s_form, long_arg_length,
 			l_form);
 
 		const auto padding = strlen(preamble);
@@ -52,7 +53,7 @@ struct Output {
 		}
 
 		char out_buf[buf_size];
-		sprintf_s(out_buf, buf_size, "%s%s\n", preamble, broken_desc.c_str());
+		snprintf(out_buf, buf_size, "%s%s\n", preamble, broken_desc.c_str());
 
 		printf("%s", out_buf);
 	}

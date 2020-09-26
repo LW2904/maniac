@@ -8,6 +8,7 @@
 #include <thread>
 #include <vector>
 #include <random>
+#include <cstring>
 #include <algorithm>
 
 // TODO: I don't like the osu namespace since it leads to the ugly `osu::Osu` but
@@ -40,10 +41,6 @@ namespace osu {
 
 		// Only used for debugging
 		void log() const;
-
-		inline void execute() {
-			Process::send_keypress(key, down);
-		}
 	};
 
 	class Osu : public Process {
@@ -63,6 +60,8 @@ namespace osu {
 		bool is_playing();
 
 		internal::map_player get_map_player();
+
+		void execute_action(Action *action);
 
 		static std::string get_key_subset(int column_count);
 	};
@@ -88,5 +87,9 @@ namespace osu {
 		}
 
 		return address != 0;
+	}
+
+	inline void Osu::execute_action(Action *action) {
+		send_keypress(action->key, action->down);
 	}
 }

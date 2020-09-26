@@ -42,12 +42,12 @@ std::string Osu::get_key_subset(int column_count) {
 
 	const size_t subset_offset = (keys_len / 2) - (column_count / 2);
 
-	memmove_s(key_subset, key_subset_len, reinterpret_cast<const void *>(keys + subset_offset),
+	memmove(key_subset, reinterpret_cast<const void *>(keys + subset_offset),
 		keys_len - (subset_offset * 2));
 
 	if (column_count % 2) {
 		auto offset = column_count / 2;
-		memmove_s(key_subset + offset + 1, key_subset_len + offset + 1, key_subset + offset,
+		memmove(key_subset + offset + 1, key_subset + offset,
 			offset);
 
 		key_subset[column_count / 2] = ' ';

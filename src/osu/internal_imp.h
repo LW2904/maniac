@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../process/process.h"
+
 inline Process *process;
 
 struct hit_object {

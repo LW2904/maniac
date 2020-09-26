@@ -1,8 +1,17 @@
 #pragma once
 
-#define __STDC_WANT_LIB_EXT1__ 1
+#ifdef _WIN32
+	#define ON_WINDOWS
 
-#include "Windows.h"
+	#include "Windows.h"
+
+	#define __STDC_WANT_LIB_EXT1__ 1
+#endif
+
+#ifdef __linux__
+	#define ON_LINUX
+#endif
+
 #include <cstdint>
 #include <cstddef>
 

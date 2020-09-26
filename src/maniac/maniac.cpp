@@ -13,7 +13,7 @@ namespace maniac {
 	void play(std::vector<osu::Action> &actions) {
 		auto keys = osu::Osu::get_key_subset(9);
 		for (auto key : keys) {
-			Process::send_keypress(key, false);
+			osu->send_keypress(key, false);
 		}
 
 		auto cur_i = 0;
@@ -27,7 +27,7 @@ namespace maniac {
 
 			cur_time = osu->get_game_time();
 			while (cur_i < total_actions && (raw_actions + cur_i)->time <= cur_time) {
-				(raw_actions + cur_i)->execute();
+				osu->execute_action(raw_actions + cur_i);
 
 				cur_i++;
 			}

@@ -1,21 +1,29 @@
 #include "process.h"
 
 Process::Process(const std::string &name) {
-	handle = get_handle(name);
+	context = get_context(name);
 }
 
 Process::~Process() {
-	CloseHandle(handle);
+	#ifdef ON_WINDOWS
+		CloseHandle(context.handle);
+	#endif
+
+	#ifdef ON_LINUX
+		debug("stub");
+	#endif
 }
 
-HANDLE Process::get_handle(const std::string &name) {
-	auto find_process = [](const std::string &name) {
+Process::id_t Process::find_process(const std::string &name) {
+	#ifdef ON_WINDOWS
 		PROCESSENTRY32 processInfo;
 		processInfo.dwSize = sizeof(PROCESSENTRY32);
 
-		HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+		HANDLE snapshot = CreateToolhelp32Snapshot(
+			TH32CS_SNAPPROCESS, 0);
 		if (!snapshot || snapshot == INVALID_HANDLE_VALUE) {
-			throw std::runtime_error("failed to get process list");
+			throw std::runtime_error(
+				"failed to get process list");
 		}
 
 		Process32First(snapshot, &processInfo);
@@ -33,23 +41,61 @@ HANDLE Process::get_handle(const std::string &name) {
 
 		CloseHandle(snapshot);
 		return 0ul;
-	};
+	#endif
 
+	#ifdef ON_LINUX
+		// TODO: Straight outta old maniac.
+		char *cmd = (char *)calloc(1, 200);
+		sprintf(cmd, "pidof %s", name.c_str());
+
+		FILE *f = popen(cmd, "r");
+		size_t read = fread(cmd , 1, 200, f);
+		fclose(f);
+
+		auto process_id = read
+			? (unsigned long)strtol(cmd, nullptr, 10)
+			: 0;
+		free(cmd);
+
+		return process_id;
+	#endif
+}
+
+Process::Context Process::get_context(const std::string &name) {
 	auto process_id = find_process(name);
 	if (!process_id) {
 		throw std::runtime_error("failed finding process");
 	}
 
-	debug("%s '%s' %s %lu", "found process", name.c_str(), "with id", process_id);
+	debug("%s '%s' %s %d", "found process", name.c_str(), "with id", process_id);
 
-	HANDLE handle = OpenProcess(PROCESS_VM_READ, FALSE, process_id);
-	if (!handle || handle == INVALID_HANDLE_VALUE) {
-		throw std::runtime_error("failed opening handle to process");
-	}
+	#ifdef ON_WINDOWS
+		HANDLE handle = OpenProcess(PROCESS_VM_READ, FALSE, process_id);
+		if (!handle || handle == INVALID_HANDLE_VALUE) {
+			throw std::runtime_error("failed opening handle to process");
+		}
 
-	debug("%s '%s' (%#x)", "got handle to process", name.c_str(), (uintptr_t)handle);
+		debug("%s '%s' (%#x)", "got handle to process", name.c_str(),
+			(uintptr_t)handle);
 
-	return handle;
+		Context ctx{};
+		ctx.handle = handle:
+		return ctx;
+	#endif
+
+	#ifdef ON_LINUX
+		Display* display;
+		if (!(display = XOpenDisplay(nullptr))) {
+			throw std::runtime_error("failed opening X display");
+		}
+
+		debug("%s %#x", "opened X display", (unsigned)(uintptr_t)display);
+
+		Context ctx{};
+		ctx.display = display;
+		ctx.process_id = process_id;
+		return ctx;
+	#endif
 }
 
 uintptr_t Process::find_pattern(const char *pattern) {

@@ -5,13 +5,40 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <climits>
 #include <stdexcept>
-#include <tlhelp32.h>
+
+#ifdef ON_WINDOWS
+	#include <tlhelp32.h>
+#endif
+
+#ifdef ON_LINUX
+	#include <sys/uio.h>
+	#include <X11/Xlib.h>
+	#include <X11/extensions/XTest.h>
+#endif
 
 class Process {
-	HANDLE handle;
+	#ifdef ON_WINDOWS
+		using id_t = DWORD;
+	#endif
+	#ifdef ON_LINUX
+		using id_t = pid_t;
+	#endif
 
-	static HANDLE get_handle(const std::string &name);
+	struct Context {
+		#ifdef ON_WINDOWS
+			HANDLE handle;
+		#endif
+
+		#ifdef ON_LINUX
+			id_t process_id;
+			Display *display;
+		#endif
+	} context;
+
+	static Context get_context(const std::string &name);
+	static id_t find_process(const std::string &name);
 
 public:
 	explicit Process(const std::string &name);
@@ -47,18 +74,33 @@ public:
 	 */
 	uintptr_t find_pattern(const char *pattern);
 
-	static void send_keypress(char key, bool down);
+	void send_keypress(char key, bool down) const;
 };
 
 template<typename T>
 inline size_t Process::read_memory(uintptr_t address, T *out, size_t count) {
 	size_t read = 0;
 
-	if (!ReadProcessMemory(handle, reinterpret_cast<LPCVOID>(address),
-		reinterpret_cast<LPVOID>(out), count * sizeof(T),
-		reinterpret_cast<SIZE_T *>(&read))) {
-		return 0;
-	}
+	#ifdef ON_WINDOWS
+		if (!ReadProcessMemory(handle, reinterpret_cast<LPCVOID>(address),
+			reinterpret_cast<LPVOID>(out), count * sizeof(T),
+			reinterpret_cast<SIZE_T *>(&read))) {
+			return 0;
+		}
+	#endif
+
+	#ifdef ON_LINUX
+		struct iovec local[1];
+		struct iovec remote[1];
+
+		local[0].iov_len = count * sizeof(T);
+		local[0].iov_base = out;
+
+		remote[0].iov_len = count * sizeof(T);
+		remote[0].iov_base = (void *)address;
+
+		read = process_vm_readv(context.process_id, local, 1, remote, 1, 0);
+	#endif
 
 	return read;
 }
@@ -77,14 +119,14 @@ inline T Process::read_memory(uintptr_t address) {
 template<typename T, typename Any>
 T Process::read_memory_safe(const char *name, Any addr) {
 	// TODO: So much for "safe".
-	uintptr_t address = (uintptr_t)(void *)addr;
+	auto address = (uintptr_t)(void *)addr;
 
 	if (!address) {
 		// TODO: Get rid of this ASAP once std::format is out.
 		char msg[128];
 		msg[127] = '\0';
 
-		sprintf_s(msg, 128, "pointer to %s was invalid", name);
+		snprintf(msg, 128, "pointer to %s was invalid", name);
 
 		throw std::runtime_error(msg);
 	}
@@ -96,7 +138,7 @@ T Process::read_memory_safe(const char *name, Any addr) {
 		char msg[128];
 		msg[127] = '\0';
 
-		sprintf_s(msg, 128, "failed reading %s at %#x", name, address);
+		snprintf(msg, 128, "failed reading %s at %#x", name, address);
 
 		throw std::runtime_error(msg);
 	}
@@ -106,22 +148,35 @@ T Process::read_memory_safe(const char *name, Any addr) {
 	return out;
 }
 
-inline void Process::send_keypress(char key, bool down) {
-	// TODO: Look into KEYEVENTF_SCANCODE (see esp. KEYBDINPUT remarks section).
+inline void Process::send_keypress(char key, bool down) const {
+	#ifdef ON_WINDOWS
+		// TODO: Look into KEYEVENTF_SCANCODE (see esp. KEYBDINPUT remarks section).
 
-	static INPUT in;
-	static auto layout = GetKeyboardLayout(0);
+		static INPUT in;
+		static auto layout = GetKeyboardLayout(0);
 
-	in.type = INPUT_KEYBOARD;
-	in.ki.time = 0;
-	in.ki.wScan = 0;
-	in.ki.dwExtraInfo = 0;
-	in.ki.dwFlags = down ? 0 : KEYEVENTF_KEYUP;
-	// TODO: Populate an array of scan codes for the keys that are going to be
-	//	 pressed to avoid calculating them all the time.
-	in.ki.wVk = VkKeyScanEx(key, layout) & 0xFF;
+		in.type = INPUT_KEYBOARD;
+		in.ki.time = 0;
+		in.ki.wScan = 0;
+		in.ki.dwExtraInfo = 0;
+		in.ki.dwFlags = down ? 0 : KEYEVENTF_KEYUP;
+		// TODO: Populate an array of scan codes for the keys that are going to be
+		//	 pressed to avoid calculating them all the time.
+		in.ki.wVk = VkKeyScanEx(key, layout) & 0xFF;
 
-	if (!SendInput(1, &in, sizeof(INPUT))) {
-		debug("failed sending input: %lu", GetLastError());
-	}
+		if (!SendInput(1, &in, sizeof(INPUT))) {
+			debug("failed sending input: %lu", GetLastError());
+		}
+	#endif
+
+	#ifdef ON_LINUX
+		KeyCode keycode = XKeysymToKeycode(context.display, key);
+
+		if (!keycode)
+			return;
+
+		XTestFakeKeyEvent(context.display, (unsigned)keycode, down, CurrentTime);
+
+		XFlush(context.display);
+	#endif
 }
