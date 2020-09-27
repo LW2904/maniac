@@ -79,27 +79,37 @@ public:
 
 template<typename T>
 inline size_t Process::read_memory(uintptr_t address, T *out, size_t count) {
-	size_t read = 0;
-
 	#ifdef ON_WINDOWS
+		size_t read = 0;
+
 		if (!ReadProcessMemory(handle, reinterpret_cast<LPCVOID>(address),
 			reinterpret_cast<LPVOID>(out), count * sizeof(T),
 			reinterpret_cast<SIZE_T *>(&read))) {
 			return 0;
 		}
+
+		return read;
 	#endif
 
 	#ifdef ON_LINUX
+		ssize_t read = 0;
+
 		struct iovec local[1];
 		struct iovec remote[1];
 
 		local[0].iov_len = count * sizeof(T);
-		local[0].iov_base = out;
+		local[0].iov_base = (void *)out;
 
 		remote[0].iov_len = count * sizeof(T);
 		remote[0].iov_base = (void *)address;
 
 		read = process_vm_readv(context.process_id, local, 1, remote, 1, 0);
+
+		if (read == -1) {
+			return 0;
+		}
+
+		return read;
 	#endif
 
 	return read;
