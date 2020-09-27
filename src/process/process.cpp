@@ -121,8 +121,13 @@ uintptr_t Process::find_pattern(const char *pattern) {
 	const size_t chunk_size = 4096;
 	std::byte chunk_bytes[chunk_size];
 
-	for (uintptr_t i = 1; i < INT_MAX; i += chunk_size - pattern_size) {
+	uintptr_t i;
+	uintptr_t failed_reads = 0;
+
+	for (i = 1; i < INT_MAX; i += chunk_size - pattern_size) {
 		if (!read_memory<std::byte>(i, chunk_bytes, chunk_size)) {
+			failed_reads++;
+
 			continue;
 		}
 
@@ -147,5 +152,8 @@ uintptr_t Process::find_pattern(const char *pattern) {
 		}
 	}
 
-	return 0;
+	debug("%f%% of reads failed (%lu/%lu)", ((double)failed_reads / (double)i) * 100,
+       		failed_reads, i)
+
+	throw std::runtime_error("pattern not found");
 }
