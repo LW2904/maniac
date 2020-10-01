@@ -1,3 +1,5 @@
+_This branch represents an effort to port maniac to the Linux OS family and is currently not in an usable state._
+
 <h2 align="center">maniac</h2>
 
 <p align="center">
